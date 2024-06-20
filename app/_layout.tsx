@@ -1,12 +1,34 @@
+import Colors from '@/constants/Colors';
+import { Ionicons } from '@expo/vector-icons';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { useFonts } from 'expo-font';
-import { Stack } from 'expo-router';
+import { Stack, useRouter } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
+import { TouchableOpacity } from 'react-native';
+import * as SecureStore from 'expo-secure-store';
 import 'react-native-reanimated';
+import { ClerkProvider, useAuth } from '@clerk/clerk-expo';
+const CLERK_PUBLISHABLE_KEY = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY;
 
-import { useColorScheme } from '@/components/useColorScheme';
+const tokenCache = {
+  async getToken(key: string){
+    try {
+      return await SecureStore.getItemAsync(key);
+    } catch (error) {
+      console.error('Failed to fetch the auth token', error);
+      return null;
+    }
+  },
+  async saveToken(key: string, token: string){
+    try {
+      await SecureStore.setItemAsync(key, token);
+    } catch (error) {
+      console.error('Failed to set the auth token', error);
+    }
+  },
+}
 
 export {
   // Catch any errors thrown by the Layout component.
@@ -23,7 +45,9 @@ SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
   const [loaded, error] = useFonts({
-    SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
+    'ms-b': require('@/assets/fonts/Montserrat-Bold.ttf'),
+    'ms-r': require('@/assets/fonts/Montserrat-Regular.ttf'),
+    'ms-sb': require('@/assets/fonts/Montserrat-SemiBold.ttf'),
     ...FontAwesome.font,
   });
 
@@ -38,22 +62,69 @@ export default function RootLayout() {
     }
   }, [loaded]);
 
+  
+
   if (!loaded) {
     return null;
   }
 
-  return <RootLayoutNav />;
+  return(
+    <ClerkProvider  publishableKey={CLERK_PUBLISHABLE_KEY!} tokenCache={tokenCache}>
+      <RootLayoutNav />
+    </ClerkProvider>
+  )
 }
 
 function RootLayoutNav() {
-  const colorScheme = useColorScheme();
+  const router = useRouter();
+  const { isLoaded, isSignedIn } = useAuth();
 
+  useEffect(() => {
+    if (isLoaded && !isSignedIn) {
+      router.push('(modals)/login');
+    }
+  }, [isLoaded]);
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <Stack>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="modal" options={{ presentation: 'modal' }} />
-      </Stack>
-    </ThemeProvider>
+    <Stack>
+    <Stack.Screen
+      name="(modals)/login"
+      options={{
+        presentation: 'modal',
+        title: 'Log in or sign up',
+        headerTitleStyle: {
+          fontFamily: 'mon-sb',
+        },
+        headerLeft: () => (
+          <TouchableOpacity onPress={() => router.back()}>
+            <Ionicons name="close-outline" size={28} />
+          </TouchableOpacity>
+        ),
+      }}
+    />
+    <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+    <Stack.Screen name="listing/[id]" options={{ headerTitle: '', headerBackTitleVisible: false }} />
+    <Stack.Screen
+      name="(modals)/booking"
+      options={{
+        presentation: 'transparentModal',
+        animation: 'fade',
+        headerTransparent: true,
+        headerTitle: (props) => <></>,
+        headerLeft: () => (
+          <TouchableOpacity
+            onPress={() => router.back()}
+            style={{
+              backgroundColor: '#fff',
+              borderColor: Colors.grey,
+              borderRadius: 20,
+              borderWidth: 1,
+              padding: 4,
+            }}>
+            <Ionicons name="close-outline" size={22} />
+          </TouchableOpacity>
+        ),
+      }}
+    />
+  </Stack>
   );
 }
